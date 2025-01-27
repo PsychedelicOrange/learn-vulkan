@@ -6,6 +6,8 @@ project(
 	DESCRIPTION "learn-vulkan"
 	LANGUAGES C
 	)
+
+
 # generate compile_compands for clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -18,6 +20,9 @@ target_compile_options(learn-vulkan PRIVATE -Wall -g)
 target_include_directories(learn-vulkan PRIVATE src)
 
 find_package(OpenAL REQUIRED)
+
+find_library(CLIB_LIB clib HINTS /usr/lib/clib)
+
 # find_package(cglm CONFIG REQUIRED)
 target_link_libraries( learn-vulkan
 	PRIVATE
@@ -26,6 +31,7 @@ target_link_libraries( learn-vulkan
 	X11 # for glfw3
 	m # math
 	cglm
+	${CLIB_LIB}
 	)
 
 

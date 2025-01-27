@@ -8,3 +8,4 @@ to get a basic understanding of this api.
 - Currently I'm following the instructions in [vulkan-tutorial](https://vulkan-tutorial.com/Development_environment) to setup the repo in c.
 - I downloaded the unofficial build of shaderc/glslc instead of glslangvalidator which lookedd more complicated.
 - From here on, I made a CmakeLists.txt and ran the test program to enumerate extensions 
+- Added some libs from [here](https://github.com/PsychedelicOrange/clibs) which i can develop side by side and use here.
