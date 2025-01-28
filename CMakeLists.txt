@@ -7,7 +7,6 @@ project(
 	LANGUAGES C
 	)
 
-
 # generate compile_compands for clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -15,7 +14,7 @@ file(GLOB_RECURSE srcfiles src/*.c src/*.h)
 
 add_executable(learn-vulkan ${srcfiles})
 
-target_compile_options(learn-vulkan PRIVATE -Wall -g)
+target_compile_options(learn-vulkan PRIVATE -Wall -Wextra -Werror -g)
 
 target_include_directories(learn-vulkan PRIVATE src)
 
@@ -24,7 +23,7 @@ find_package(OpenAL REQUIRED)
 find_library(CLIB_LIB clib HINTS /usr/lib/clib)
 
 # find_package(cglm CONFIG REQUIRED)
-target_link_libraries( learn-vulkan
+target_link_libraries(learn-vulkan
 	PRIVATE
 	vulkan
 	glfw3
