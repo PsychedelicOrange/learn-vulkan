@@ -170,6 +170,88 @@ VkInstance createInstance() {
   }
   return instance;
 }
+struct QueueFamilyIndices {
+  int graphics_present;
+  int compute_present;
+  int raytrace_present;
+  uint32_t graphics;
+  uint32_t compute;
+  uint32_t raytrace;
+};
+VkPhysicalDevice pick_physical_device(VkInstance instance) {
+  VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+
+  uint32_t deviceCount = 0;
+  vkEnumeratePhysicalDevices(instance, &deviceCount, NULL);
+  VkPhysicalDevice devices[deviceCount];
+  vkEnumeratePhysicalDevices(instance, &deviceCount, devices);
+  logi("%i devices found", deviceCount);
+
+  // select discrete gpu as physical device
+  VkPhysicalDeviceProperties deviceProperties = {0};
+  for (uint32_t i = 0; i < deviceCount; i++) {
+    if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+      physicalDevice = devices[i];
+    }
+    vkGetPhysicalDeviceProperties(devices[i], &deviceProperties);
+    logi("%s | %li", deviceProperties.deviceName, deviceProperties.vendorID);
+  }
+  if (physicalDevice == VK_NULL_HANDLE) {
+    loge("No discrete GPU Found");
+    exit(1);
+  }
+  return physicalDevice;
+}
+struct QueueFamilyIndices get_queue_family(VkPhysicalDevice physicalDevice) {
+
+  uint32_t queueFamilyCount;
+  vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount,
+                                           NULL);
+  VkQueueFamilyProperties queueProps[queueFamilyCount];
+  vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount,
+                                           queueProps);
+  struct QueueFamilyIndices fam = {
+      .compute_present = 0, .graphics_present = 0, .raytrace_present = 0};
+  for (uint32_t i = 0; i < queueFamilyCount; i++) {
+    if (queueProps[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+      fam.graphics_present = 1;
+      fam.graphics = i;
+    } else if (queueProps[i].queueFlags & VK_QUEUE_COMPUTE_BIT) {
+      fam.compute_present = 1;
+      fam.compute = i;
+    }
+  }
+  return fam;
+}
+VkDevice create_device(VkPhysicalDevice physicalDevice,
+                       struct QueueFamilyIndices queues) {
+  float queuePriority = 1.0f;
+
+  VkDeviceQueueCreateInfo vkDeviceQueueCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+      .queueFamilyIndex = queues.graphics,
+      .pQueuePriorities = &queuePriority,
+      .queueCount = 1};
+
+  VkPhysicalDeviceFeatures vkPhysicalDeviceFeatures = {.robustBufferAccess = 0};
+  // for old implementations - new implementations ignore layers set here and
+  // refer to instance layers
+  const char *layersEnable[1] = {"VK_LAYER_KHRONOS_validation"};
+  VkDeviceCreateInfo vkDeviceCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+      .pQueueCreateInfos = &vkDeviceQueueCreateInfo,
+      .queueCreateInfoCount = 1,
+      .ppEnabledLayerNames = layersEnable,
+      .enabledLayerCount = 1,
+      .pEnabledFeatures = &vkPhysicalDeviceFeatures};
+  VkDevice device = VK_NULL_HANDLE;
+  if (vkCreateDevice(physicalDevice, &vkDeviceCreateInfo, 0, &device) !=
+      VK_SUCCESS) {
+    loge("Couldn't create logical device!");
+    exit(1);
+  }
+  return device;
+}
 
 int main() {
   init_glfw();
@@ -177,11 +259,17 @@ int main() {
 
   VkInstance instance = createInstance();
   VkDebugUtilsMessengerEXT debugMessenger = createDebugMessenger(instance);
+  VkPhysicalDevice physicalDevice = pick_physical_device(instance);
+  struct QueueFamilyIndices queues = get_queue_family(physicalDevice);
+  VkDevice device = create_device(physicalDevice, queues);
+  VkQueue graphicsQueue = VK_NULL_HANDLE;
+  vkGetDeviceQueue(device, queues.graphics, 0, &graphicsQueue);
 
   while (!glfwWindowShouldClose(window)) {
     glfwPollEvents();
   }
 
+  vkDestroyDevice(device, 0);
   DestroyDebugUtilsMessengerEXT(instance, debugMessenger, NULL);
   vkDestroyInstance(instance, NULL);
   glfwDestroyWindow(window);
