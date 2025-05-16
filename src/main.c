@@ -561,20 +561,20 @@ void create_renderpass(VkDevice device, VkFormat format)
     VkSubpassDescription subpass = {.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     .colorAttachmentCount = 1,
                                     .pColorAttachments = &colorAttachmentRef};
-    /*VkSubpassDependency dependecy = {*/
-    /*    .srcSubpass = VK_SUBPASS_EXTERNAL,*/
-    /*    .dstSubpass = 0,*/
-    /*    .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,*/
-    /*    .srcAccessMask = 0,*/
-    /*    .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,*/
-    /*    .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,*/
-    /*};*/
+    VkSubpassDependency dependecy = {
+        .srcSubpass = VK_SUBPASS_EXTERNAL,
+        .dstSubpass = 0,
+        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask = 0,
+        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+    };
 
     VkRenderPassCreateInfo createInfo = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
         .pSubpasses = &subpass,
-        /*.pDependencies = &dependecy,*/
-        /*.dependencyCount = 1,*/
+        .pDependencies = &dependecy,
+        .dependencyCount = 1,
         .subpassCount = 1,
         .attachmentCount = 1,
         .pAttachments = &colorAttachment,
@@ -866,7 +866,7 @@ int main()
         vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE, &i);
         vkResetCommandBuffer(buffer, 0);
         recordCommandBuffer(buffer, framebuffers[i], graphicsPipeline, vkSwapChainCreateInfo.imageExtent);
-        VkPipelineStageFlags stages[1] = {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT};
+        VkPipelineStageFlags stages[1] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
         VkSubmitInfo submitInfo = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
                                    .waitSemaphoreCount = 1,
                                    .pWaitSemaphores = &imageAvailableSemaphore,
