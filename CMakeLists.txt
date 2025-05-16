@@ -4,7 +4,7 @@ project(
 	learn-vulkan
 	VERSION 1.0
 	DESCRIPTION "learn-vulkan"
-	LANGUAGES C
+	LANGUAGES CXX C
 	)
 
 # generate compile_compands for clangd

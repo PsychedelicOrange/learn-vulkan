@@ -17,3 +17,5 @@ learn-vulkan
 
 .vscode
 
+
+*.spv
