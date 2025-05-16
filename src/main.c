@@ -21,7 +21,6 @@ struct cleanup
 {
     VkRenderPass renderPass;
     VkPipelineLayout pipelineLayout;
-    VkFramebuffer *swapChainFramebuffers;
 } global;
 
 code read_shader(const char *filename)
@@ -710,7 +709,7 @@ VkFramebuffer *createFrameBuffers(VkDevice device, VkExtent2D swapchainExtent, V
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         framebufferInfo.renderPass = global.renderPass;
         framebufferInfo.attachmentCount = 1;
-        framebufferInfo.pAttachments = views;
+        framebufferInfo.pAttachments = &views[i];
         framebufferInfo.width = swapchainExtent.width;
         framebufferInfo.height = swapchainExtent.height;
         framebufferInfo.layers = 1;
@@ -846,7 +845,6 @@ int main()
         createGraphicsPipeline(device, vkSwapChainCreateInfo.imageExtent, vkSwapChainCreateInfo.imageFormat);
     VkFramebuffer *framebuffers =
         createFrameBuffers(device, vkSwapChainCreateInfo.imageExtent, swapchainImageViews, swapchainImages_count);
-    (void)(framebuffers);
 
     // create command pools
     VkCommandPool commandPool = createCommandPool(device, queues);
