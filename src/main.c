@@ -809,7 +809,7 @@ VkFence createFence(VkDevice device)
 int main()
 {
     init_glfw();
-    GLFWwindow *window = create_glfw_window(1920, 1080, "Vulkan window");
+    GLFWwindow *window = create_glfw_window(4096, 4096, "Vulkan window");
 
     VkInstance instance = createInstance();                                   // not checked
     VkSurfaceKHR surface = create_surface(instance, window);                  // checked
@@ -853,7 +853,8 @@ int main()
 
     VkFence inFlightFence = createFence(device);                   // signaled when frame presentation is finished
     VkSemaphore imageAvailableSemaphore = createSemaphore(device); // signaled when image aquired from swapchain
-    VkSemaphore renderFinishSemaphore = createSemaphore(device);   // signaled when image is completely drawn into
+    VkSemaphore renderFinishSemaphores[4] = {createSemaphore(device), createSemaphore(device), createSemaphore(device),
+                                             createSemaphore(device)};
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
@@ -872,7 +873,7 @@ int main()
                                    .commandBufferCount = 1,
                                    .pCommandBuffers = &buffer,
                                    .signalSemaphoreCount = 1,
-                                   .pSignalSemaphores = &renderFinishSemaphore
+                                   .pSignalSemaphores = &(renderFinishSemaphores[i])
 
         };
         if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFence) != VK_SUCCESS)
@@ -884,7 +885,7 @@ int main()
             .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
             .swapchainCount = 1,
             .pSwapchains = &swapchain,
-            .pWaitSemaphores = &renderFinishSemaphore,
+            .pWaitSemaphores = &renderFinishSemaphores[i],
             .waitSemaphoreCount = 1,
             .pImageIndices = &i,
         };
@@ -893,7 +894,6 @@ int main()
     vkDeviceWaitIdle(device);
     // cleanup
     vkDestroySemaphore(device, imageAvailableSemaphore, NULL);
-    vkDestroySemaphore(device, renderFinishSemaphore, NULL);
     vkDestroyFence(device, inFlightFence, NULL);
     vkDestroyCommandPool(device, commandPool, NULL);
     vkDestroyPipeline(device, graphicsPipeline, NULL);
@@ -901,6 +901,7 @@ int main()
     {
         vkDestroyFramebuffer(device, framebuffers[i], NULL);
         vkDestroyImageView(device, swapchainImageViews[i], NULL);
+        vkDestroySemaphore(device, renderFinishSemaphores[i], NULL);
     }
     vkDestroyRenderPass(device, global.renderPass, NULL);
     vkDestroyPipelineLayout(device, global.pipelineLayout, NULL);
