@@ -70,6 +70,7 @@ void init_glfw()
 {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_RESIZABLE, 0);
 }
 
 void *create_glfw_window(int SCR_WIDTH, int SCR_HEIGHT, char *null_terminated_name)
@@ -264,18 +265,23 @@ VkPhysicalDevice pick_physical_device(VkInstance instance)
     VkPhysicalDeviceProperties deviceProperties = {0};
     for (uint32_t i = 0; i < deviceCount; i++)
     {
-        if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
-        {
-            physicalDevice = devices[i];
-        }
         vkGetPhysicalDeviceProperties(devices[i], &deviceProperties);
         logi("%s | %li", deviceProperties.deviceName, deviceProperties.vendorID);
+        if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+        {
+            logi("Categorized as discrete: %s | %li", deviceProperties.deviceName, deviceProperties.vendorID);
+            physicalDevice = devices[i];
+            break;
+        }
     }
+
     if (physicalDevice == VK_NULL_HANDLE)
     {
         loge("No discrete GPU Found");
         exit(1);
     }
+    vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
+    logi("Picked device: %s | %li", deviceProperties.deviceName, deviceProperties.vendorID);
     return physicalDevice;
 }
 struct QueueFamilyIndices get_queue_family(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface)
@@ -327,6 +333,7 @@ VkDevice create_device(VkPhysicalDevice physicalDevice, struct QueueFamilyIndice
                                           .pQueuePriorities = &queuePriority,
                                           .queueCount = 1};
     }
+    logi("Queue count: %i", count);
     // device extensions
     const char *extensions[1] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
     VkPhysicalDeviceFeatures vkPhysicalDeviceFeatures = {.robustBufferAccess = 0};
@@ -353,7 +360,7 @@ VkDevice create_device(VkPhysicalDevice physicalDevice, struct QueueFamilyIndice
 VkSurfaceKHR create_surface(VkInstance instance, GLFWwindow *window)
 {
     VkSurfaceKHR surface;
-    if (glfwCreateWindowSurface(instance, window, 0, &surface) != VK_SUCCESS)
+    if (glfwCreateWindowSurface(instance, window, NULL, &surface) != VK_SUCCESS)
     {
         loge("failed to create window surface!");
     }
@@ -373,6 +380,14 @@ uint32_t clamp(uint32_t d, uint32_t min, uint32_t max)
     const uint32_t t = d < min ? min : d;
     return t > max ? max : t;
 }
+void print_swap_chain_details(VkSwapchainCreateInfoKHR details)
+{
+    printf("ImageFormat: %i\n", details.imageFormat);
+    printf("imageColorSpace: %i\n", details.imageColorSpace);
+    printf("presentMode: %i\n", details.presentMode);
+    printf("extentH: %i\n", details.imageExtent.height);
+    printf("extentW: %i\n", details.imageExtent.width);
+}
 VkSwapchainCreateInfoKHR querySwapChainSupportDetails(VkPhysicalDevice device, VkSurfaceKHR surface, GLFWwindow *window)
 {
     struct SwapChainSupportDetails details;
@@ -385,11 +400,15 @@ VkSwapchainCreateInfoKHR querySwapChainSupportDetails(VkPhysicalDevice device, V
         vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &details.formats_count, details.formats);
     }
 
-    vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &details.presentModes_count, NULL);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &details.presentModes_count, NULL);
     if (details.presentModes_count != 0)
     {
-        details.presentModes = malloc(sizeof(VkSurfaceFormatKHR) * details.formats_count);
+        details.presentModes = malloc(sizeof(VkPresentModeKHR) * details.presentModes_count);
         vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &details.presentModes_count, details.presentModes);
+        for (size_t i = 0; i < details.presentModes_count; i++)
+        {
+            logi("Present mode %i : %i", i, details.presentModes[i]);
+        }
     }
     int swapChainAdequate = 0;
     swapChainAdequate = !details.formats_count && !details.presentModes_count;
@@ -470,8 +489,9 @@ VkSwapchainCreateInfoKHR querySwapChainSupportDetails(VkPhysicalDevice device, V
                                                     .preTransform = details.capabilities.currentTransform,
                                                     .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
                                                     .presentMode = presentMode,
-                                                    .clipped = 1,
+                                                    .clipped = VK_TRUE,
                                                     .oldSwapchain = VK_NULL_HANDLE};
+    print_swap_chain_details(swapchainCreateInfo);
     struct QueueFamilyIndices indices = get_queue_family(device, surface);
     if (indices.graphics != indices.presentation)
     {
@@ -483,8 +503,6 @@ VkSwapchainCreateInfoKHR querySwapChainSupportDetails(VkPhysicalDevice device, V
     else
     {
         swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        swapchainCreateInfo.queueFamilyIndexCount = 0;  // Optional
-        swapchainCreateInfo.pQueueFamilyIndices = NULL; // Optional
     }
     return swapchainCreateInfo;
 }
@@ -527,7 +545,7 @@ VkShaderModule createShaderModule(VkDevice device, code code)
     }
     return shaderModule;
 }
-VkRenderPass create_renderpass(VkDevice device, VkFormat format)
+void create_renderpass(VkDevice device, VkFormat format)
 {
     VkAttachmentDescription colorAttachment = {.format = format,
                                                .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -537,32 +555,34 @@ VkRenderPass create_renderpass(VkDevice device, VkFormat format)
                                                .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                                                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                                                .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR};
+
     VkAttachmentReference colorAttachmentRef = {.attachment = 0, .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+
     VkSubpassDescription subpass = {.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     .colorAttachmentCount = 1,
                                     .pColorAttachments = &colorAttachmentRef};
-    VkRenderPass renderPass;
-    VkSubpassDependency dependecy = {
-        .srcSubpass = VK_SUBPASS_EXTERNAL,
-        .dstSubpass = 0,
-        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .srcAccessMask = 0,
-        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-    };
+    /*VkSubpassDependency dependecy = {*/
+    /*    .srcSubpass = VK_SUBPASS_EXTERNAL,*/
+    /*    .dstSubpass = 0,*/
+    /*    .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,*/
+    /*    .srcAccessMask = 0,*/
+    /*    .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,*/
+    /*    .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,*/
+    /*};*/
 
-    VkRenderPassCreateInfo createInfo = {.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-                                         .pSubpasses = &subpass,
-                                         .subpassCount = 1,
-                                         .attachmentCount = 1,
-                                         .pAttachments = &colorAttachment,
-                                         .dependencyCount = 1,
-                                         .pDependencies = &dependecy};
-    if (vkCreateRenderPass(device, &createInfo, NULL, &renderPass) != VK_SUCCESS)
+    VkRenderPassCreateInfo createInfo = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .pSubpasses = &subpass,
+        /*.pDependencies = &dependecy,*/
+        /*.dependencyCount = 1,*/
+        .subpassCount = 1,
+        .attachmentCount = 1,
+        .pAttachments = &colorAttachment,
+    };
+    if (vkCreateRenderPass(device, &createInfo, NULL, &global.renderPass) != VK_SUCCESS)
     {
         loge("failed to create render pass!");
     }
-    return renderPass;
 }
 VkPipeline createGraphicsPipeline(VkDevice device, VkExtent2D swapchainExtent, VkFormat format)
 {
@@ -642,9 +662,11 @@ VkPipeline createGraphicsPipeline(VkDevice device, VkExtent2D swapchainExtent, V
     VkPipelineColorBlendStateCreateInfo colorBlending = {.sType =
                                                              VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
                                                          .logicOpEnable = VK_FALSE,
+                                                         .logicOp = VK_LOGIC_OP_COPY,
+                                                         .blendConstants = {0, 0, 0, 0},
                                                          .attachmentCount = 1,
                                                          .pAttachments = &colorBlendAttachment};
-    global.renderPass = create_renderpass(device, format);
+    create_renderpass(device, format);
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .setLayoutCount = 0, .pushConstantRangeCount = 0};
@@ -661,14 +683,12 @@ VkPipeline createGraphicsPipeline(VkDevice device, VkExtent2D swapchainExtent, V
                                                  .pViewportState = &viewportState,
                                                  .pRasterizationState = &rasterizer,
                                                  .pMultisampleState = &multisampling,
-                                                 .pDepthStencilState = NULL,
                                                  .pColorBlendState = &colorBlending,
                                                  .pDynamicState = &dynamicState,
                                                  .layout = global.pipelineLayout,
                                                  .renderPass = global.renderPass,
                                                  .subpass = 0,
-                                                 .basePipelineHandle = VK_NULL_HANDLE,
-                                                 .basePipelineIndex = -1};
+                                                 .basePipelineHandle = VK_NULL_HANDLE};
     VkPipeline graphicsPipeline;
     if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, NULL, &graphicsPipeline) != VK_SUCCESS)
     {
@@ -730,8 +750,7 @@ VkCommandBuffer createCommandBuffer(VkDevice device, VkCommandPool commandPool)
 }
 void recordCommandBuffer(VkCommandBuffer buffer, VkFramebuffer framebuffer, VkPipeline pipeline, VkExtent2D imageExtent)
 {
-    VkCommandBufferBeginInfo beginInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = 0, .pInheritanceInfo = NULL};
+    VkCommandBufferBeginInfo beginInfo = {.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     if (vkBeginCommandBuffer(buffer, &beginInfo) != VK_SUCCESS)
     {
         loge("Couldn't record command buffer");
@@ -793,10 +812,11 @@ int main()
     init_glfw();
     GLFWwindow *window = create_glfw_window(1920, 1080, "Vulkan window");
 
-    VkInstance instance = createInstance();
-    VkSurfaceKHR surface = create_surface(instance, window);
-    VkDebugUtilsMessengerEXT debugMessenger = createDebugMessenger(instance);
-    VkPhysicalDevice physicalDevice = pick_physical_device(instance);
+    VkInstance instance = createInstance();                                   // not checked
+    VkSurfaceKHR surface = create_surface(instance, window);                  // checked
+    VkDebugUtilsMessengerEXT debugMessenger = createDebugMessenger(instance); // checked
+    VkPhysicalDevice physicalDevice =
+        pick_physical_device(instance); // TODO: will check logs to see if proper device is getting picked
     struct QueueFamilyIndices queues = get_queue_family(physicalDevice, surface);
     VkDevice device = create_device(physicalDevice, queues);
     VkQueue graphicsQueue = VK_NULL_HANDLE;
@@ -846,7 +866,7 @@ int main()
         vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE, &i);
         vkResetCommandBuffer(buffer, 0);
         recordCommandBuffer(buffer, framebuffers[i], graphicsPipeline, vkSwapChainCreateInfo.imageExtent);
-        VkPipelineStageFlags stages[1] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        VkPipelineStageFlags stages[1] = {VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT};
         VkSubmitInfo submitInfo = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
                                    .waitSemaphoreCount = 1,
                                    .pWaitSemaphores = &imageAvailableSemaphore,
