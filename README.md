@@ -14,3 +14,8 @@ to get a basic understanding of this api.
 - I downloaded the vulkan-sdk tarball and installed the includes,bins and libs respective to thier /usr directories
 - I followed some https://www.youtube.com/watch?v=0OqJtPnkfC8 till 16mins, for basic advice.
 - Now I am gonna proceed with vulkan-tutorial's boiler-plate setup.
+[Update] 
+- So i kept rewatching the TU Wien University lectures along with following vulkan-tutorial to finally get
+
+my very own, 900 loc, 4096 x 4096 traingle !!!!
+![triangle](./triangle.jpg)
